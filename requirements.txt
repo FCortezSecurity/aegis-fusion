@@ -1,4 +1,4 @@
-﻿bandit==1.9.4
+bandit==1.9.4
 boolean.py==5.0
 CacheControl==0.14.4
 certifi==2026.7.22
