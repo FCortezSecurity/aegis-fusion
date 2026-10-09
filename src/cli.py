@@ -6,6 +6,7 @@ from src.scanners.bandit_scanner import run_bandit
 from src.scanners.checkov_scanner import run_checkov
 from src.scanners.gitleaks_scanner import run_gitleaks
 from src.scanners.pip_audit_scanner import run_pip_audit
+from src.scanners.trivy_scanner import run_trivy_config, run_trivy_image
 
 
 def main() -> None:
@@ -13,6 +14,9 @@ def main() -> None:
         prog="aegis", description="Aegis Fusion: security scanning automation"
     )
     parser.add_argument("target", type=Path, help="Folder to scan")
+    parser.add_argument(
+        "--image", help="Also scan this container image, e.g. python:3.8-slim"
+    )
     args = parser.parse_args()
 
     if not args.target.exists():
@@ -70,6 +74,25 @@ def main() -> None:
         rel = os.path.relpath(c["file_path"])
         line = c["file_line_range"][0]
         print(f"[{c['check_id']}] {rel}:{line} - {c['check_name']} ({c['resource']})")
+
+    # --- Trivy: Dockerfile misconfigurations ---
+    docker_findings = run_trivy_config(args.target)
+    print(f"\n== Trivy (Dockerfile): {len(docker_findings)} issue(s) ==")
+    for f in docker_findings:
+        rel = os.path.relpath(f["file"])
+        print(f"[{f['severity']}] {f['id']} {rel}:{f['line']} - {f['title']}")
+
+    # --- Trivy: container image vulnerabilities (optional) ---
+    if args.image:
+        img = run_trivy_image(args.image)
+        counts = img["counts"]
+        print(
+            f"\n== Trivy (image {img['image']}): "
+            f"{counts['CRITICAL']} CRITICAL, {counts['HIGH']} HIGH =="
+        )
+        for c in img["critical"]:
+            fixed = c["fixed"] or "no fix available"
+            print(f"[CRITICAL] {c['id']} {c['package']} {c['installed']} (fix: {fixed})")
 
 
 if __name__ == "__main__":
