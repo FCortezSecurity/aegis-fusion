@@ -45,7 +45,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Security gate on project source
-        run: python -m src.cli src
+        run: python -m src.cli samples/vulnerable_app
 
       - name: Self-test, gate must fail on the vulnerable sample
         run: |
