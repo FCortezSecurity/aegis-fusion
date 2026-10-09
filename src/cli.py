@@ -1,23 +1,8 @@
 import argparse
-import json
-import subprocess
-import sys
 from pathlib import Path
 
-
-def run_bandit(target: Path) -> dict:
-    """Run Bandit against a folder and return its parsed JSON output."""
-    result = subprocess.run(
-        [sys.executable, "-m", "bandit", "-r", str(target), "-f", "json", "-q"],
-        capture_output=True,
-        text=True,
-    )
-    # Bandit exits 1 when it FINDS issues. That is not a failure.
-    if result.returncode not in (0, 1) or not result.stdout.strip():
-        raise RuntimeError(
-            f"Bandit failed (exit {result.returncode}): {result.stderr.strip()}"
-        )
-    return json.loads(result.stdout)
+from src.scanners.bandit_scanner import run_bandit
+from src.scanners.pip_audit_scanner import run_pip_audit
 
 
 def main() -> None:
@@ -30,14 +15,40 @@ def main() -> None:
     if not args.target.exists():
         parser.error(f"Target not found: {args.target}")
 
-    data = run_bandit(args.target)
-    results = data.get("results", [])
-    print(f"Bandit found {len(results)} issue(s)")
+    # --- Bandit: code issues ---
+    bandit_data = run_bandit(args.target)
+    results = bandit_data.get("results", [])
+    print(f"== Bandit: {len(results)} issue(s) ==")
     for r in results:
         print(
             f"[{r['issue_severity']}] {r['test_id']} "
             f"{r['filename']}:{r['line_number']} - {r['issue_text']}"
         )
+
+    # --- pip-audit: vulnerable dependencies ---
+    audit_data = run_pip_audit(args.target)
+    vulnerable = []
+    total_unique = 0
+    for dep in audit_data["dependencies"]:
+        # Deduplicate: the same vulnerability ID can appear more than once
+        unique = {}
+        for v in dep.get("vulns", []):
+            unique.setdefault(v["id"], v)
+        if unique:
+            vulnerable.append((dep["name"], dep["version"], unique))
+            total_unique += len(unique)
+
+    print(
+        f"\n== pip-audit: {len(vulnerable)} vulnerable package(s), "
+        f"{total_unique} unique vulnerabilities =="
+    )
+    for name, version, unique in vulnerable:
+        print(f"{name} {version} - {len(unique)} known vulnerabilities")
+        for vuln_id, v in list(unique.items())[:3]:
+            fixes = ", ".join(v.get("fix_versions", [])) or "no fix listed"
+            print(f"    {vuln_id} (fix: {fixes})")
+        if len(unique) > 3:
+            print(f"    ...and {len(unique) - 3} more")
 
 
 if __name__ == "__main__":
