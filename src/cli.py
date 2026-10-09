@@ -16,6 +16,12 @@ from src.normalization.adapters import (
 from src.normalization.finding import SEVERITIES, Finding
 from src.policy.config import DEFAULT_POLICY_PATH, load_policy
 from src.policy.engine import Verdict, evaluate
+from src.reporting.report import (
+    build_report,
+    group_findings,
+    render_markdown,
+    write_json,
+)
 from src.scanners.bandit_scanner import run_bandit
 from src.scanners.checkov_scanner import run_checkov
 from src.scanners.gitleaks_scanner import run_gitleaks
@@ -62,12 +68,17 @@ def print_report(
     for severity in SEVERITIES:
         print(f"  {severity:<9} {verdict.counts[severity]}")
 
-    shown = verdict.blocking if show_all else verdict.blocking[:DEFAULT_SHOWN]
-    print(f"\nBlocking findings ({len(verdict.blocking)})")
-    for f in shown:
-        location = f"{f.file}:{f.line}" if f.line else f.file
-        print(f"  [{f.severity}] {f.tool} {f.rule_id} {location} - {_clip(f.title)}")
-    hidden = len(verdict.blocking) - len(shown)
+    rows = group_findings(verdict.blocking)
+    shown = rows if show_all else rows[:DEFAULT_SHOWN]
+    print(
+        f"\nBlocking findings ({len(verdict.blocking)}, "
+        f"dependencies grouped by package)"
+    )
+    for e in shown:
+        location = f"{e['file']}:{e['line']}" if e["line"] else e["file"]
+        rule = e["rule_ids"][0] if e["count"] == 1 else f"{e['count']} advisories"
+        print(f"  [{e['severity']}] {e['tool']} {rule} {location} - {_clip(e['title'])}")
+    hidden = len(rows) - len(shown)
     if hidden:
         print(f"  ...and {hidden} more (run with --all to list everything)")
 
@@ -92,20 +103,40 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--all", action="store_true", help="List every blocking finding"
     )
+    parser.add_argument(
+        "--json", type=Path, metavar="PATH", help="Write a JSON report to PATH"
+    )
+    parser.add_argument(
+        "--markdown", type=Path, metavar="PATH", help="Write a Markdown report to PATH"
+    )
     args = parser.parse_args(argv)
 
     if not args.target.exists():
         parser.error(f"Target not found: {args.target}")
 
+    target_name = args.target.as_posix()
     try:
         policy = load_policy(args.policy)
         findings = collect_findings(args.target, args.image, policy)
         verdict = evaluate(findings, policy)
+
+        # Reports are written whether the scan passes or fails.
+        if args.json:
+            write_json(args.json, build_report(target_name, findings, verdict))
+        if args.markdown:
+            args.markdown.parent.mkdir(parents=True, exist_ok=True)
+            args.markdown.write_text(
+                render_markdown(target_name, findings, verdict), encoding="utf-8"
+            )
     except (RuntimeError, ValueError, OSError, yaml.YAMLError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_ERROR
 
     print_report(args.target, findings, verdict, args.all)
+    if args.json:
+        print(f"JSON report written to {args.json}")
+    if args.markdown:
+        print(f"Markdown report written to {args.markdown}")
     return EXIT_PASS if verdict.passed else EXIT_FAIL
 
 
