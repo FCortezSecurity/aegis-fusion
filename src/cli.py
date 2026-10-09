@@ -1,7 +1,9 @@
 import argparse
+import os
 from pathlib import Path
 
 from src.scanners.bandit_scanner import run_bandit
+from src.scanners.gitleaks_scanner import run_gitleaks
 from src.scanners.pip_audit_scanner import run_pip_audit
 
 
@@ -30,7 +32,6 @@ def main() -> None:
     vulnerable = []
     total_unique = 0
     for dep in audit_data["dependencies"]:
-        # Deduplicate: the same vulnerability ID can appear more than once
         unique = {}
         for v in dep.get("vulns", []):
             unique.setdefault(v["id"], v)
@@ -49,6 +50,13 @@ def main() -> None:
             print(f"    {vuln_id} (fix: {fixes})")
         if len(unique) > 3:
             print(f"    ...and {len(unique) - 3} more")
+
+    # --- Gitleaks: hardcoded secrets ---
+    leaks = run_gitleaks(args.target)
+    print(f"\n== Gitleaks: {len(leaks)} secret(s) ==")
+    for leak in leaks:
+        rel = os.path.relpath(leak["File"])
+        print(f"[{leak['RuleID']}] {rel}:{leak['StartLine']} - {leak['Description']}")
 
 
 if __name__ == "__main__":
