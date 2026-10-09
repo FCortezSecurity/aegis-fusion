@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 
 from src.scanners.bandit_scanner import run_bandit
+from src.scanners.checkov_scanner import run_checkov
 from src.scanners.gitleaks_scanner import run_gitleaks
 from src.scanners.pip_audit_scanner import run_pip_audit
 
@@ -57,6 +58,18 @@ def main() -> None:
     for leak in leaks:
         rel = os.path.relpath(leak["File"])
         print(f"[{leak['RuleID']}] {rel}:{leak['StartLine']} - {leak['Description']}")
+
+    # --- Checkov: infrastructure-as-code misconfigurations ---
+    checkov = run_checkov(args.target)
+    failed = checkov["failed"]
+    print(
+        f"\n== Checkov: {len(failed)} failed check(s), "
+        f"{checkov['passed']} passed =="
+    )
+    for c in failed:
+        rel = os.path.relpath(c["file_path"])
+        line = c["file_line_range"][0]
+        print(f"[{c['check_id']}] {rel}:{line} - {c['check_name']} ({c['resource']})")
 
 
 if __name__ == "__main__":
