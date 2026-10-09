@@ -27,3 +27,34 @@ jobs:
 
       - name: Run unit tests
         run: python -m pytest tests -v
+
+  security-scan:
+    needs: tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Security gate on project source
+        run: python -m src.cli src
+
+      - name: Self-test, gate must fail on the vulnerable sample
+        run: |
+          set +e
+          python -m src.cli samples/vulnerable_app
+          code=$?
+          echo "Aegis exit code: $code"
+          if [ "$code" -ne 1 ]; then
+            echo "Expected exit code 1 (policy failure), got $code"
+            exit 1
+          fi
+          echo "Gate correctly failed on the intentionally vulnerable sample"
