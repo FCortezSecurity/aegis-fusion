@@ -141,3 +141,24 @@ def from_trivy_config(raw: list, policy: dict) -> list[Finding]:
         )
         for f in raw
     ]
+
+
+def from_trivy_image(raw: list, policy: dict) -> list[Finding]:
+    """Convert Trivy's image vulnerabilities into Finding objects."""
+    return [
+        Finding(
+            tool="trivy",
+            rule_id=v["id"],
+            severity=normalize_severity(
+                severity_for(policy, "trivy", v["id"], fallback=v["severity"])
+            ),
+            title=f"{v['package']} {v['installed']} - {v['title']}",
+            file=v["image"],
+            fix=(
+                f"Upgrade {v['package']} to {v['fixed']}"
+                if v["fixed"]
+                else "No fix available yet; consider a newer base image"
+            ),
+        )
+        for v in raw
+    ]

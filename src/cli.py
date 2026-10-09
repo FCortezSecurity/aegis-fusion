@@ -1,15 +1,84 @@
 import argparse
-import os
+import sys
+from collections import Counter
 from pathlib import Path
 
+import yaml
+
+from src.normalization.adapters import (
+    from_bandit,
+    from_checkov,
+    from_gitleaks,
+    from_pip_audit,
+    from_trivy_config,
+    from_trivy_image,
+)
+from src.normalization.finding import SEVERITIES, Finding
+from src.policy.config import DEFAULT_POLICY_PATH, load_policy
+from src.policy.engine import Verdict, evaluate
 from src.scanners.bandit_scanner import run_bandit
 from src.scanners.checkov_scanner import run_checkov
 from src.scanners.gitleaks_scanner import run_gitleaks
 from src.scanners.pip_audit_scanner import run_pip_audit
 from src.scanners.trivy_scanner import run_trivy_config, run_trivy_image
 
+EXIT_PASS = 0   # policy satisfied
+EXIT_FAIL = 1   # policy violated: findings at a fail_on level
+EXIT_ERROR = 2  # the scan itself broke (Docker down, bad policy file, ...)
 
-def main() -> None:
+TOOLS = ["bandit", "pip-audit", "gitleaks", "checkov", "trivy"]
+DEFAULT_SHOWN = 15
+
+
+def collect_findings(target: Path, image: str | None, policy: dict) -> list[Finding]:
+    """Run every scanner and return all findings in the common format."""
+    findings: list[Finding] = []
+    findings += from_bandit(run_bandit(target))
+    findings += from_pip_audit(run_pip_audit(target), policy)
+    findings += from_gitleaks(run_gitleaks(target), policy)
+    findings += from_checkov(run_checkov(target), policy)
+    findings += from_trivy_config(run_trivy_config(target), policy)
+    if image:
+        findings += from_trivy_image(run_trivy_image(image), policy)
+    return findings
+
+
+def _clip(text: str, width: int = 90) -> str:
+    text = " ".join(text.split())
+    return text if len(text) <= width else text[: width - 3] + "..."
+
+
+def print_report(
+    target: Path, findings: list[Finding], verdict: Verdict, show_all: bool
+) -> None:
+    print(f"Aegis Fusion scan of {target}\n")
+
+    by_tool = Counter(f.tool for f in findings)
+    print("Findings by tool")
+    for tool in TOOLS:
+        print(f"  {tool:<10} {by_tool.get(tool, 0)}")
+
+    print("\nFindings by severity")
+    for severity in SEVERITIES:
+        print(f"  {severity:<9} {verdict.counts[severity]}")
+
+    shown = verdict.blocking if show_all else verdict.blocking[:DEFAULT_SHOWN]
+    print(f"\nBlocking findings ({len(verdict.blocking)})")
+    for f in shown:
+        location = f"{f.file}:{f.line}" if f.line else f.file
+        print(f"  [{f.severity}] {f.tool} {f.rule_id} {location} - {_clip(f.title)}")
+    hidden = len(verdict.blocking) - len(shown)
+    if hidden:
+        print(f"  ...and {hidden} more (run with --all to list everything)")
+
+    print(f"\nWarnings: {len(verdict.warnings)}")
+    if verdict.passed:
+        print("\nRESULT: PASS")
+    else:
+        print(f"\nRESULT: FAIL ({len(verdict.blocking)} blocking finding(s))")
+
+
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="aegis", description="Aegis Fusion: security scanning automation"
     )
@@ -17,83 +86,28 @@ def main() -> None:
     parser.add_argument(
         "--image", help="Also scan this container image, e.g. python:3.8-slim"
     )
-    args = parser.parse_args()
+    parser.add_argument(
+        "--policy", type=Path, default=DEFAULT_POLICY_PATH, help="Policy YAML file"
+    )
+    parser.add_argument(
+        "--all", action="store_true", help="List every blocking finding"
+    )
+    args = parser.parse_args(argv)
 
     if not args.target.exists():
         parser.error(f"Target not found: {args.target}")
 
-    # --- Bandit: code issues ---
-    bandit_data = run_bandit(args.target)
-    results = bandit_data.get("results", [])
-    print(f"== Bandit: {len(results)} issue(s) ==")
-    for r in results:
-        print(
-            f"[{r['issue_severity']}] {r['test_id']} "
-            f"{r['filename']}:{r['line_number']} - {r['issue_text']}"
-        )
+    try:
+        policy = load_policy(args.policy)
+        findings = collect_findings(args.target, args.image, policy)
+        verdict = evaluate(findings, policy)
+    except (RuntimeError, ValueError, OSError, yaml.YAMLError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_ERROR
 
-    # --- pip-audit: vulnerable dependencies ---
-    audit_data = run_pip_audit(args.target)
-    vulnerable = []
-    total_unique = 0
-    for dep in audit_data["dependencies"]:
-        unique = {}
-        for v in dep.get("vulns", []):
-            unique.setdefault(v["id"], v)
-        if unique:
-            vulnerable.append((dep["name"], dep["version"], unique))
-            total_unique += len(unique)
-
-    print(
-        f"\n== pip-audit: {len(vulnerable)} vulnerable package(s), "
-        f"{total_unique} unique vulnerabilities =="
-    )
-    for name, version, unique in vulnerable:
-        print(f"{name} {version} - {len(unique)} known vulnerabilities")
-        for vuln_id, v in list(unique.items())[:3]:
-            fixes = ", ".join(v.get("fix_versions", [])) or "no fix listed"
-            print(f"    {vuln_id} (fix: {fixes})")
-        if len(unique) > 3:
-            print(f"    ...and {len(unique) - 3} more")
-
-    # --- Gitleaks: hardcoded secrets ---
-    leaks = run_gitleaks(args.target)
-    print(f"\n== Gitleaks: {len(leaks)} secret(s) ==")
-    for leak in leaks:
-        rel = os.path.relpath(leak["File"])
-        print(f"[{leak['RuleID']}] {rel}:{leak['StartLine']} - {leak['Description']}")
-
-    # --- Checkov: infrastructure-as-code misconfigurations ---
-    checkov = run_checkov(args.target)
-    failed = checkov["failed"]
-    print(
-        f"\n== Checkov: {len(failed)} failed check(s), "
-        f"{checkov['passed']} passed =="
-    )
-    for c in failed:
-        rel = os.path.relpath(c["file_path"])
-        line = c["file_line_range"][0]
-        print(f"[{c['check_id']}] {rel}:{line} - {c['check_name']} ({c['resource']})")
-
-    # --- Trivy: Dockerfile misconfigurations ---
-    docker_findings = run_trivy_config(args.target)
-    print(f"\n== Trivy (Dockerfile): {len(docker_findings)} issue(s) ==")
-    for f in docker_findings:
-        rel = os.path.relpath(f["file"])
-        print(f"[{f['severity']}] {f['id']} {rel}:{f['line']} - {f['title']}")
-
-    # --- Trivy: container image vulnerabilities (optional) ---
-    if args.image:
-        img = run_trivy_image(args.image)
-        counts = img["counts"]
-        print(
-            f"\n== Trivy (image {img['image']}): "
-            f"{counts['CRITICAL']} CRITICAL, {counts['HIGH']} HIGH =="
-        )
-        for c in img["critical"]:
-            fixed = c["fixed"] or "no fix available"
-            print(f"[CRITICAL] {c['id']} {c['package']} {c['installed']} (fix: {fixed})")
+    print_report(args.target, findings, verdict, args.all)
+    return EXIT_PASS if verdict.passed else EXIT_FAIL
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

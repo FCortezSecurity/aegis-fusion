@@ -58,32 +58,33 @@ def run_trivy_config(target: Path) -> list:
     return findings
 
 
-def run_trivy_image(image: str) -> dict:
-    """Scan a container image for HIGH and CRITICAL package vulnerabilities."""
+def run_trivy_image(image: str) -> list:
+    """Scan a container image for HIGH and CRITICAL package vulnerabilities.
+
+    Returns one dict per unique (vulnerability, package) pair.
+    """
     data = _run_trivy(
         ["image", "--severity", "HIGH,CRITICAL", "--scanners", "vuln", image],
         [],
     )
 
     seen = set()
-    counts = {"CRITICAL": 0, "HIGH": 0}
-    critical = []
+    vulns = []
     for res in data.get("Results") or []:
         for v in res.get("Vulnerabilities") or []:
             key = (v["VulnerabilityID"], v["PkgName"])
             if key in seen:
                 continue
             seen.add(key)
-            sev = v.get("Severity", "UNKNOWN")
-            if sev in counts:
-                counts[sev] += 1
-            if sev == "CRITICAL":
-                critical.append(
-                    {
-                        "id": v["VulnerabilityID"],
-                        "package": v["PkgName"],
-                        "installed": v.get("InstalledVersion", ""),
-                        "fixed": v.get("FixedVersion", ""),
-                    }
-                )
-    return {"image": image, "counts": counts, "critical": critical}
+            vulns.append(
+                {
+                    "image": image,
+                    "id": v["VulnerabilityID"],
+                    "package": v["PkgName"],
+                    "installed": v.get("InstalledVersion", ""),
+                    "fixed": v.get("FixedVersion", ""),
+                    "severity": v.get("Severity", "UNKNOWN"),
+                    "title": v.get("Title", ""),
+                }
+            )
+    return vulns
