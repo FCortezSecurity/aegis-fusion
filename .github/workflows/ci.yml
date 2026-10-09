@@ -44,6 +44,22 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Pre-pull scanner images (with retries)
+        run: |
+          for image in zricethezav/gitleaks:latest bridgecrew/checkov:latest aquasec/trivy:latest; do
+            for attempt in 1 2 3 4; do
+              if docker pull "$image"; then
+                break
+              fi
+              if [ "$attempt" -eq 4 ]; then
+                echo "Could not pull $image after 4 attempts"
+                exit 1
+              fi
+              echo "Pull of $image failed (attempt $attempt), retrying in $((attempt * 15))s"
+              sleep $((attempt * 15))
+            done
+          done
+
       - name: Security gate on project source
         run: python -m src.cli src --json reports/source.json --markdown reports/source.md
 
