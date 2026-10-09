@@ -1,0 +1,29 @@
+# Aegis Fusion policy: what counts as serious, and what fails a build.
+
+thresholds:
+  fail_on: [CRITICAL, HIGH]   # any finding at these levels fails the build
+  warn_on: [MEDIUM]           # reported, but does not fail the build
+
+# Severity decisions for tools that don't report one of their own.
+# A rule listed under "rules" wins; otherwise the tool's "default" applies.
+severity_map:
+  gitleaks:
+    default: HIGH             # an exposed credential is serious by default
+
+  pip-audit:
+    default: HIGH             # known-vulnerable dependency; refine with CVSS later
+
+  checkov:
+    default: MEDIUM
+    rules:
+      CKV_AWS_24: HIGH        # SSH open to the whole internet
+      CKV_AWS_20: HIGH        # S3 bucket ACL allows public read
+      CKV2_AWS_6: MEDIUM      # no S3 public access block
+      CKV_AWS_145: MEDIUM     # S3 not encrypted with KMS
+      CKV_AWS_21: LOW         # versioning not enabled
+      CKV_AWS_18: LOW         # access logging not enabled
+      CKV_AWS_144: LOW        # no cross-region replication
+      CKV_AWS_23: LOW         # security group missing description
+      CKV2_AWS_5: LOW         # security group not attached to anything
+      CKV2_AWS_61: LOW        # no lifecycle configuration
+      CKV2_AWS_62: LOW        # no event notifications

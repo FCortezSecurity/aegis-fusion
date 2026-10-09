@@ -2,10 +2,7 @@ import os
 import sys
 
 from src.normalization.finding import SEVERITIES, Finding
-
-# Gitleaks reports no severity of its own, so we choose a default here.
-# A later step moves this into configs/policies.yaml.
-SECRET_SEVERITY = "HIGH"
+from src.policy.config import severity_for
 
 # Different tools use different words for the same idea.
 SEVERITY_ALIASES = {
@@ -56,13 +53,16 @@ def from_bandit(raw: dict) -> list[Finding]:
     ]
 
 
-def from_gitleaks(raw: list) -> list[Finding]:
+def from_gitleaks(raw: list, policy: dict | None = None) -> list[Finding]:
     """Convert Gitleaks' JSON findings into Finding objects."""
+    policy = policy or {}
     return [
         Finding(
             tool="gitleaks",
             rule_id=leak["RuleID"],
-            severity=SECRET_SEVERITY,
+            severity=normalize_severity(
+                severity_for(policy, "gitleaks", leak["RuleID"])
+            ),
             title=leak["Description"],
             file=_rel(leak["File"]),
             line=leak["StartLine"],
@@ -72,4 +72,72 @@ def from_gitleaks(raw: list) -> list[Finding]:
             ),
         )
         for leak in raw
+    ]
+
+
+def from_pip_audit(raw: dict, policy: dict) -> list[Finding]:
+    """Convert pip-audit output into Finding objects (one per unique vuln)."""
+    findings = []
+    for dep in raw.get("dependencies", []):
+        seen = set()
+        for v in dep.get("vulns", []):
+            if v["id"] in seen:
+                continue
+            seen.add(v["id"])
+            fixes = v.get("fix_versions") or []
+            findings.append(
+                Finding(
+                    tool="pip-audit",
+                    rule_id=v["id"],
+                    severity=normalize_severity(
+                        severity_for(policy, "pip-audit", v["id"])
+                    ),
+                    title=f"{dep['name']} {dep['version']} has a known vulnerability",
+                    file=f"{dep['name']}=={dep['version']}",
+                    fix=(
+                        "Upgrade to one of: " + ", ".join(fixes)
+                        if fixes
+                        else "No fixed version listed"
+                    ),
+                )
+            )
+    return findings
+
+
+def from_checkov(raw: dict, policy: dict) -> list[Finding]:
+    """Convert Checkov's failed checks into Finding objects."""
+    return [
+        Finding(
+            tool="checkov",
+            rule_id=c["check_id"],
+            severity=normalize_severity(
+                severity_for(policy, "checkov", c["check_id"])
+            ),
+            title=f"{c['check_name']} ({c['resource']})",
+            file=_rel(c["file_path"]),
+            line=c["file_line_range"][0],
+            fix=c.get("guideline") or "",
+        )
+        for c in raw.get("failed", [])
+    ]
+
+
+def from_trivy_config(raw: list, policy: dict) -> list[Finding]:
+    """Convert Trivy's Dockerfile findings into Finding objects.
+
+    Trivy reports its own severity; a policy rule can still override it.
+    """
+    return [
+        Finding(
+            tool="trivy",
+            rule_id=f["id"],
+            severity=normalize_severity(
+                severity_for(policy, "trivy", f["id"], fallback=f["severity"])
+            ),
+            title=f["title"],
+            file=_rel(f["file"]),
+            line=f["line"],
+            fix=f.get("resolution", ""),
+        )
+        for f in raw
     ]
