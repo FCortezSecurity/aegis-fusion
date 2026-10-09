@@ -45,12 +45,12 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Security gate on project source
-        run: python -m src.cli src
+        run: python -m src.cli src --json reports/source.json --markdown reports/source.md
 
       - name: Self-test, gate must fail on the vulnerable sample
         run: |
           set +e
-          python -m src.cli samples/vulnerable_app
+          python -m src.cli samples/vulnerable_app --json reports/sample.json --markdown reports/sample.md
           code=$?
           echo "Aegis exit code: $code"
           if [ "$code" -ne 1 ]; then
@@ -58,3 +58,20 @@ jobs:
             exit 1
           fi
           echo "Gate correctly failed on the intentionally vulnerable sample"
+
+      - name: Show reports on the run summary
+        if: always()
+        run: |
+          for f in reports/source.md reports/sample.md; do
+            if [ -f "$f" ]; then
+              cat "$f" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aegis-reports
+          path: reports/
+          if-no-files-found: warn
