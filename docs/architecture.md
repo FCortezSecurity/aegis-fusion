@@ -74,3 +74,15 @@ Scanners disagree on exit codes: Bandit, pip-audit, Gitleaks, and Checkov exit 1
 3. Call both from `collect_findings` in `src/cli.py`, and add the tool name to the `TOOLS` list there.
 4. Add a default (and any rule overrides) under `severity_map` in `configs/policies.yaml`.
 5. Add unit tests for the adapter in `tests/unit/`.
+
+## Updating the pinned scanner images
+
+The images are pinned in `src/scanners/images.py`. To update one, using Gitleaks as the example:
+
+```
+docker pull zricethezav/gitleaks:latest
+docker image inspect zricethezav/gitleaks:latest --format "{{index .RepoDigests 0}}"
+docker run --rm zricethezav/gitleaks:latest version
+```
+
+Put the new digest and version in `images.py`, run `python -m pytest tests -v` and a scan of `samples/vulnerable_app`, and open a pull request. CI will show whether the results changed.

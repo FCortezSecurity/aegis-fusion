@@ -2,7 +2,8 @@ import json
 import subprocess
 from pathlib import Path
 
-TRIVY_IMAGE = "aquasec/trivy:latest"
+from src.scanners.images import TRIVY_IMAGE
+
 # Named volume so the vulnerability database is downloaded once, not every run
 CACHE_MOUNT = ["-v", "aegis-trivy-cache:/root/.cache/"]
 

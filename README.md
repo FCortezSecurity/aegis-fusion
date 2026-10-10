@@ -126,13 +126,14 @@ The pipeline scans the project's own code (`src`), which must pass, and then sca
 - **One format.** Findings are an immutable dataclass that validates its severity. Adapters keep the scanners' quirks out of the policy engine.
 - **Severity lives in config.** For tools without severity, the mapping is in `configs/policies.yaml`, not buried in code.
 - **Least privilege.** Scanner containers mount the target read-only, Gitleaks output is redacted, the workflow token is read-only, runners are pinned to `ubuntu-24.04`, and image pulls are retried.
+- **Pinned scanners.** The three scanner images are pinned by digest in one module (`src/scanners/images.py`), and CI pre-pulls exactly those images, so CI and a laptop run the same scanner versions. Updating a pin is a deliberate pull request.
 - **Reports on failure.** Reports are written before the exit code is returned and uploaded with `if: always()`, because failing runs are the ones people need to read.
 
 ## Limitations
 
 - **pip-audit reports no severity.** Every advisory defaults to HIGH, so dependency findings dominate the counts. Looking up CVSS scores would fix this.
 - **Checkov severities are hand-assigned** in the policy file for the checks seen so far. Everything else defaults to MEDIUM.
-- **Scanner images use `:latest`**, so results can change between runs. Pinning versions is the next hardening step. GitHub Actions are pinned by version tag, not commit SHA.
+- **Scanner images are pinned by digest, but the data behind them is live.** The scanner programs cannot change between runs, but Trivy's vulnerability database and pip-audit's advisories are fetched fresh, so a newly published CVE can turn a passing scan red. That is deliberate. GitHub Actions are pinned by version tag, not commit SHA.
 - **Scanner coverage overlaps only partly.** Gitleaks missed the low-entropy `SuperSecret123!` that Bandit caught, which is why several tools run.
 - **Narrow scope.** Checkov scans Terraform only, Trivy's config scan covers Dockerfiles only, and the image scan runs on request (`--image`) and not in CI.
 - **Not built:** a web dashboard and Windows endpoint telemetry, both optional in my original plan.
