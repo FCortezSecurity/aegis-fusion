@@ -129,7 +129,6 @@ The pipeline scans the project's own code (`src`), which must pass, and then sca
 - **Pinned scanners.** The three scanner images are pinned by digest in one module (`src/scanners/images.py`), and CI pre-pulls exactly those images, so CI and a laptop run the same scanner versions. Updating a pin is a deliberate pull request.
 - **Reports on failure.** Reports are written before the exit code is returned and uploaded with `if: always()`, because failing runs are the ones people need to read.
 
-## Limitations
 
 ## Challenges & Fixes
 
@@ -145,6 +144,8 @@ Every one of these was hit for real during this build, not anticipated in advanc
 | CI went red with exit code 2 and no findings | Docker Hub timed out while the runner pulled a scanner image | Pre-pull the images with retries, then pin them by digest |
 | A failing check still left the Merge button active | A red check is only a warning unless it is marked required | A repository ruleset now requires both checks and a pull request |
 | The test suite passed while two scanners were still unpinned | The test inspected `images.py` but not the scanner modules that used the images | Added a test that fails if any scanner module defines its own image |
+## Limitations
+
 - **pip-audit reports no severity.** Every advisory defaults to HIGH, so dependency findings dominate the counts. Looking up CVSS scores would fix this.
 - **Checkov severities are hand-assigned** in the policy file for the checks seen so far. Everything else defaults to MEDIUM.
 - **Scanner images are pinned by digest, but the data behind them is live.** The scanner programs cannot change between runs, but Trivy's vulnerability database and pip-audit's advisories are fetched fresh, so a newly published CVE can turn a passing scan red. That is deliberate. GitHub Actions are pinned by version tag, not commit SHA.

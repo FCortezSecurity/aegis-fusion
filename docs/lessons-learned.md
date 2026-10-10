@@ -40,7 +40,7 @@ Problems I hit while building Aegis Fusion, with the root cause of each and what
 
 **Fix:** Saved the file and reran. Gitleaks then found both secrets.
 
-**Lesson:** Never trust a scanner's "clean" result until it has been proven on input known to be bad. The pipeline now does this on every run (see lesson 8).
+**Lesson:** Never trust a scanner's "clean" result until it has been proven on input known to be bad. The pipeline now does this on every run (the CI self-test must fail on a deliberately vulnerable sample).
 
 ## 5. Trivy exits 0 even when it finds problems
 
