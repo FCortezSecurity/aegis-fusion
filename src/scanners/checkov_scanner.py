@@ -2,7 +2,7 @@ import json
 import subprocess
 from pathlib import Path
 
-CHECKOV_IMAGE = "bridgecrew/checkov"
+from src.scanners.images import CHECKOV_IMAGE
 
 
 def run_checkov(target: Path) -> dict:

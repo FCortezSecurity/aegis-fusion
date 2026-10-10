@@ -2,7 +2,7 @@ import json
 import subprocess
 from pathlib import Path
 
-GITLEAKS_IMAGE = "zricethezav/gitleaks:latest"
+from src.scanners.images import GITLEAKS_IMAGE
 
 
 def run_gitleaks(target: Path) -> list:
