@@ -149,6 +149,7 @@ src/policy/                 policy loading and pass/fail engine
 src/reporting/              JSON and Markdown reports, dependency grouping
 tests/unit/                 unit tests (no Docker needed)
 samples/vulnerable_app/     intentionally vulnerable scan targets
+docs/                       architecture, setup and usage guides
 docs/images/                screenshots
 ```
 
@@ -157,6 +158,12 @@ Run the tests with:
 ```powershell
 python -m pytest tests -v
 ```
+
+## More documentation
+
+- [Architecture](docs/architecture.md): the layers, how severity is decided, how to add a scanner
+- [Setup](docs/setup.md): installation and troubleshooting
+- [Usage](docs/usage.md): options, reading the output, changing the policy
 
 ## Build log
 
