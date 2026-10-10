@@ -18,10 +18,6 @@ A DevSecOps security automation tool. It runs five open-source scanners against 
 
 Gitleaks, Checkov, and Trivy run in Docker, so nothing else needs installing.
 
-![Bandit, pip-audit and Gitleaks results in one run](docs/images/03-all-three-scanners.png)
-
-![Checkov, Trivy Dockerfile and Trivy image results](docs/images/04-iac-and-container-scanners.png)
-
 ## Quick start
 
 Requires Python 3.14 (what I develop and test on) and Docker.
@@ -102,7 +98,11 @@ Every pull request runs the unit tests and then the scan. A failing scan turns t
 
 ![Failed CI run: tests passed, security-scan failed with exit code 1](docs/images/08-ci-red.png)
 
-`main` is protected by a repository ruleset. A pull request needs both `tests` and `security-scan` to pass, and nobody can bypass the rule or push directly to `main`. The same failing check that earlier left the merge button active now blocks it:
+Before I added branch protection, a failing check only warned. The merge button stayed active:
+
+![Failing check, but the merge button is still active](docs/images/07-pr-failing-check.png)
+
+`main` is now protected by a repository ruleset. A pull request needs both `tests` and `security-scan` to pass, and nobody can bypass the rule or push directly to `main`. The same failing check now blocks the merge:
 
 ![Merge pull request button disabled because required checks failed](docs/images/07b-pr-merge-blocked.png)
 
@@ -157,6 +157,14 @@ Run the tests with:
 ```powershell
 python -m pytest tests -v
 ```
+
+## Build log
+
+These early screenshots show each scanner's raw output as I integrated it, before the results were normalized into one format. The current CLI prints the unified report shown at the top of this page.
+
+![Bandit, pip-audit and Gitleaks, early milestone](docs/images/03-all-three-scanners.png)
+
+![Checkov and Trivy, early milestone](docs/images/04-iac-and-container-scanners.png)
 
 ## A note on the samples
 
