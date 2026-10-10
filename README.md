@@ -131,6 +131,20 @@ The pipeline scans the project's own code (`src`), which must pass, and then sca
 
 ## Limitations
 
+## Challenges & Fixes
+
+Every one of these was hit for real during this build, not anticipated in advance. Full root-cause detail for each is in [docs/lessons-learned.md](docs/lessons-learned.md).
+
+| Challenge | Root cause | Fix |
+|---|---|---|
+| The editor refused to save files in the project (`EPERM`) | I had cloned from an Administrator terminal into `C:\Windows\system32`, and moving the folder kept its locked-down permissions | Reset ownership and permissions on the project folder, then worked from a normal terminal in a normal user folder |
+| `requirements.txt` showed up in Git as a binary file | Windows PowerShell's `>` redirect writes UTF-16 text | Rewrote the file as plain ASCII |
+| A scanner crashed with a confusing JSON error | Bandit uses exit code 1 for "found issues", and a missing install also exited 1, so the wrapper accepted empty output as a result | Empty output now counts as a failure whatever the exit code |
+| Gitleaks reported "no leaks" on a sample full of secrets | The sample file was empty because I had not saved it. The scanner was right | Test every scanner against known-bad input before trusting a clean result. The CI self-test now does this on every run |
+| Trivy never seemed to fail a scan | Trivy exits 0 even when it finds problems, unlike the other four tools | Treat only a non-zero exit or empty output as failure, and let the policy engine decide pass or fail |
+| CI went red with exit code 2 and no findings | Docker Hub timed out while the runner pulled a scanner image | Pre-pull the images with retries, then pin them by digest |
+| A failing check still left the Merge button active | A red check is only a warning unless it is marked required | A repository ruleset now requires both checks and a pull request |
+| The test suite passed while two scanners were still unpinned | The test inspected `images.py` but not the scanner modules that used the images | Added a test that fails if any scanner module defines its own image |
 - **pip-audit reports no severity.** Every advisory defaults to HIGH, so dependency findings dominate the counts. Looking up CVSS scores would fix this.
 - **Checkov severities are hand-assigned** in the policy file for the checks seen so far. Everything else defaults to MEDIUM.
 - **Scanner images are pinned by digest, but the data behind them is live.** The scanner programs cannot change between runs, but Trivy's vulnerability database and pip-audit's advisories are fetched fresh, so a newly published CVE can turn a passing scan red. That is deliberate. GitHub Actions are pinned by version tag, not commit SHA.
@@ -165,6 +179,8 @@ python -m pytest tests -v
 - [Architecture](docs/architecture.md): the layers, how severity is decided, how to add a scanner
 - [Setup](docs/setup.md): installation and troubleshooting
 - [Usage](docs/usage.md): options, reading the output, changing the policy
+- [Lessons learned](docs/lessons-learned.md): the problems I hit, root causes, and fixes
+- [Code walkthrough](docs/code-walkthrough.md): the code explained in plain language
 
 ## Build log
 
