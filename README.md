@@ -126,6 +126,7 @@ The pipeline scans the project's own code (`src`), which must pass, and then sca
 - **One format.** Findings are an immutable dataclass that validates its severity. Adapters keep the scanners' quirks out of the policy engine.
 - **Severity lives in config.** For tools without severity, the mapping is in `configs/policies.yaml`, not buried in code.
 - **Least privilege.** Scanner containers mount the target read-only, Gitleaks output is redacted, the workflow token is read-only, runners are pinned to `ubuntu-24.04`, and image pulls are retried.
+   - **Pinned scanners.** The three scanner images are pinned by digest in one module (`src/scanners/images.py`), and CI pre-pulls exactly those images, so CI and a laptop run the same scanner versions. Updating a pin is a deliberate pull request.
 - **Reports on failure.** Reports are written before the exit code is returned and uploaded with `if: always()`, because failing runs are the ones people need to read.
 
 ## Limitations
