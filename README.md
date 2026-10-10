@@ -160,6 +160,12 @@ python -m pytest tests -v
 
 ## Build log
 
+## More documentation
+
+- [Architecture](docs/architecture.md): the layers, how severity is decided, how to add a scanner
+- [Setup](docs/setup.md): installation and troubleshooting
+- [Usage](docs/usage.md): options, reading the output, changing the policy
+
 These early screenshots show each scanner's raw output as I integrated it, before the results were normalized into one format. The current CLI prints the unified report shown at the top of this page.
 
 ![Bandit, pip-audit and Gitleaks, early milestone](docs/images/03-all-three-scanners.png)
