@@ -46,7 +46,7 @@ jobs:
 
       - name: Pre-pull scanner images (with retries)
         run: |
-          for image in zricethezav/gitleaks:latest bridgecrew/checkov:latest aquasec/trivy:latest; do
+          for image in $(python -m src.scanners.images); do
             for attempt in 1 2 3 4; do
               if docker pull "$image"; then
                 break
