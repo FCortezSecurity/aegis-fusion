@@ -149,6 +149,7 @@ src/policy/                 policy loading and pass/fail engine
 src/reporting/              JSON and Markdown reports, dependency grouping
 tests/unit/                 unit tests (no Docker needed)
 samples/vulnerable_app/     intentionally vulnerable scan targets
+docs/                       architecture, setup and usage guides
 docs/images/                screenshots
 ```
 
@@ -158,13 +159,13 @@ Run the tests with:
 python -m pytest tests -v
 ```
 
-## Build log
-
 ## More documentation
 
 - [Architecture](docs/architecture.md): the layers, how severity is decided, how to add a scanner
 - [Setup](docs/setup.md): installation and troubleshooting
 - [Usage](docs/usage.md): options, reading the output, changing the policy
+
+## Build log
 
 These early screenshots show each scanner's raw output as I integrated it, before the results were normalized into one format. The current CLI prints the unified report shown at the top of this page.
 
